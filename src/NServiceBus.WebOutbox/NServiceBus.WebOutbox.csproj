@@ -4,4 +4,10 @@
     <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="NServiceBus" Version="[7.3.0, 8.0.0)" />
+    <PackageReference Include="NServiceBus.Raw" Version="3.2.2" />
+    <PackageReference Include="NServiceBus.SqlServer" Version="[5.0.1, 7.0.0)" />
+  </ItemGroup>
+
 </Project>
