@@ -76,6 +76,8 @@ namespace Web
 
 			webOutboxConfiguration.AutoCreateQueue();
 
+			webOutboxConfiguration.RouteToEndpoint(typeof(TestCommand), "Worker");
+
 			return await webOutboxConfiguration.Start();
 		}
 
@@ -83,10 +85,7 @@ namespace Web
 		{
 			var workerConfiguration = new EndpointConfiguration("Worker");
 
-			var transport = workerConfiguration.UseTransport<LearningTransport>();
-
-			var routing = transport.Routing();
-			routing.RouteToEndpoint(typeof(TestCommand), "Worker");
+			workerConfiguration.UseTransport<LearningTransport>();
 
 			workerConfiguration.UsePersistence<InMemoryPersistence>();
 			workerConfiguration.EnableInstallers();

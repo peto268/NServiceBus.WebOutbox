@@ -33,11 +33,6 @@ namespace NServiceBus.WebOutbox
 				headers: context.Headers,
 				body: context.Body);
 
-			if (!context.Headers.TryGetValue(WebOutboxHeaders.Destination, out var destination))
-			{
-				destination = _destinationEndpointName;
-			}
-
 			if (context.Headers.ContainsKey(Headers.OriginatingEndpoint))
 			{
 				context.Headers[Headers.OriginatingEndpoint] = _destinationEndpointName;
@@ -49,23 +44,12 @@ namespace NServiceBus.WebOutbox
 				case MessageIntentEnum.Send:
 					operation = new TransportOperation(
 						request,
-						new UnicastAddressTag(destination));
+						new UnicastAddressTag(GetDestination(context)));
 					break;
 				case MessageIntentEnum.Publish:
-
-					if (!context.Headers.TryGetValue(Headers.EnclosedMessageTypes, out var enclosedMessageTypes))
-					{
-						throw new UnforwardableMessageException(
-							"Message needs to have 'NServiceBus.EnclosedMessageTypes' header in order to be forwarded.");
-					}
-
-					var messageType = enclosedMessageTypes
-						.Split(new[] {';'}, StringSplitOptions.RemoveEmptyEntries).First();
-
 					operation = new TransportOperation(
 						request,
-						new MulticastAddressTag(Type.GetType(messageType)));
-
+						new MulticastAddressTag(GetMessageType(context)));
 					break;
 				default:
 					return;
@@ -81,6 +65,31 @@ namespace NServiceBus.WebOutbox
 					transaction: transaction,
 					context: new ContextBag())
 				.ConfigureAwait(false);
+		}
+
+		private static string GetDestination(MessageContext context)
+		{
+			if (!context.Headers.TryGetValue(WebOutboxHeaders.Destination, out var destination))
+			{
+				throw new UnforwardableMessageException(
+					$"Message needs to have '{WebOutboxHeaders.Destination}' header in order to be forwarded.");
+			}
+
+			return destination;
+		}
+
+		private static Type GetMessageType(MessageContext context)
+		{
+			if (!context.Headers.TryGetValue(Headers.EnclosedMessageTypes, out var enclosedMessageTypes))
+			{
+				throw new UnforwardableMessageException(
+					$"Message needs to have '{Headers.EnclosedMessageTypes}' header in order to be forwarded.");
+			}
+
+			var messageType = enclosedMessageTypes
+				.Split(new[] {';'}, StringSplitOptions.RemoveEmptyEntries).First();
+
+			return Type.GetType(messageType);
 		}
 	}
 }

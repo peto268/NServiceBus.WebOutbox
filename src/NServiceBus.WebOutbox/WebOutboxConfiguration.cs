@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using NServiceBus.Raw;
+using NServiceBus.Routing;
 using NServiceBus.Transport;
 
 namespace NServiceBus.WebOutbox
@@ -24,6 +26,9 @@ namespace NServiceBus.WebOutbox
 		where TOutbox : TransportDefinition, new()
 		where TDestination : TransportDefinition, new()
 	{
+		private readonly IList<RouteTableEntry> _configRouteTableEntries;
+		private readonly UnicastRoutingTable _unicastRoutingTable;
+
 		private readonly EndpointConfiguration _outboxEndpointConfiguration;
 
 		private readonly RawEndpointConfiguration _forwarderEndpointConfiguration;
@@ -41,13 +46,16 @@ namespace NServiceBus.WebOutbox
 			Action<TransportExtensions<TDestination>> configureDestinationTransport,
 			string poisonMessageQueue)
 		{
+			_configRouteTableEntries = new List<RouteTableEntry>();
+			_unicastRoutingTable = new UnicastRoutingTable();
+
 			_outboxEndpointConfiguration = new EndpointConfiguration(outboxEndpointName);
 
 			configureOutboxTransport(_outboxEndpointConfiguration.UseTransport<TOutbox>());
 
 			_outboxEndpointConfiguration.Pipeline.Replace(
 				"UnicastSendRouterConnector",
-				new UnicastSendRouterConnector(outboxEndpointName),
+				new UnicastSendRouterConnector(_unicastRoutingTable, outboxEndpointName),
 				"Routes all messages to the outbox endpoint");
 
 			_outboxEndpointConfiguration.Pipeline.Replace(
@@ -84,6 +92,16 @@ namespace NServiceBus.WebOutbox
 			_destinationEndpointConfiguration.AutoCreateQueue();
 		}
 
+		public void RouteToEndpoint(Type messageType, string destination)
+		{
+			_configRouteTableEntries.Add(new RouteTableEntry(messageType, UnicastRoute.CreateFromEndpointName(destination)));
+		}
+
+		public void AddOrReplaceRoutes(string sourceKey, IList<RouteTableEntry> entries)
+		{
+			_unicastRoutingTable.AddOrReplaceRoutes(sourceKey, entries);
+		}
+
 		public async Task<IEndpointInstance> Start()
 		{
 			var destinationEndpoint = await RawEndpoint.Start(_destinationEndpointConfiguration).ConfigureAwait(false);
@@ -95,6 +113,8 @@ namespace NServiceBus.WebOutbox
 			var forwarderEndpoint = await RawEndpoint.Start(_forwarderEndpointConfiguration).ConfigureAwait(false);
 
 			_configureOutboxEndpoint?.Invoke(_outboxEndpointConfiguration);
+
+			_unicastRoutingTable.AddOrReplaceRoutes("EndpointConfiguration", _configRouteTableEntries);
 
 			var outboxEndpoint = await Endpoint.Start(_outboxEndpointConfiguration).ConfigureAwait(false);
 
