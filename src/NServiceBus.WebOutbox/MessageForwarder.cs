@@ -38,6 +38,11 @@ namespace NServiceBus.WebOutbox
 				destination = _destinationEndpointName;
 			}
 
+			if (context.Headers.ContainsKey(Headers.OriginatingEndpoint))
+			{
+				context.Headers[Headers.OriginatingEndpoint] = _destinationEndpointName;
+			}
+
 			TransportOperation operation;
 			switch (messageIntent)
 			{
