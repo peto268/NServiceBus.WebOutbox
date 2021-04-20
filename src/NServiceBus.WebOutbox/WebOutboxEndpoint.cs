@@ -6,15 +6,13 @@ namespace NServiceBus.WebOutbox
 {
 	internal class WebOutboxEndpoint : IEndpointInstance
 	{
-		private readonly string _outboxEndpointName;
 		private readonly IEndpointInstance _outboxEndpoint;
 		private readonly IStoppableRawEndpoint _forwarderEndpoint;
 		private readonly IStoppableRawEndpoint _destinationEndpoint;
 
-		public WebOutboxEndpoint(string outboxEndpointName, IEndpointInstance outboxEndpoint,
+		public WebOutboxEndpoint(IEndpointInstance outboxEndpoint,
 			IStoppableRawEndpoint forwarderEndpoint, IStoppableRawEndpoint destinationEndpoint)
 		{
-			_outboxEndpointName = outboxEndpointName;
 			_outboxEndpoint = outboxEndpoint;
 			_forwarderEndpoint = forwarderEndpoint;
 			_destinationEndpoint = destinationEndpoint;
@@ -22,13 +20,13 @@ namespace NServiceBus.WebOutbox
 
 		public Task Send(object message, SendOptions options)
 		{
-			options.SetDestination(_outboxEndpointName);
+			Process(options);
 			return _outboxEndpoint.Send(message, options);
 		}
 
 		public Task Send<T>(Action<T> messageConstructor, SendOptions options)
 		{
-			options.SetDestination(_outboxEndpointName);
+			Process(options);
 			return _outboxEndpoint.Send(messageConstructor, options);
 		}
 
@@ -44,12 +42,12 @@ namespace NServiceBus.WebOutbox
 
 		public Task Subscribe(Type eventType, SubscribeOptions options)
 		{
-			throw new NotSupportedException();
+			throw new InvalidOperationException("Outbox endpoint cannot subscribe to events.");
 		}
 
 		public Task Unsubscribe(Type eventType, UnsubscribeOptions options)
 		{
-			throw new NotSupportedException();
+			throw new InvalidOperationException("Outbox endpoint cannot unsubscribe from events.");
 		}
 
 		public async Task Stop()
@@ -57,6 +55,15 @@ namespace NServiceBus.WebOutbox
 			await _outboxEndpoint.Stop().ConfigureAwait(false);
 			await _forwarderEndpoint.Stop().ConfigureAwait(false);
 			await _destinationEndpoint.Stop().ConfigureAwait(false);
+		}
+
+		private static void Process(SendOptions options)
+		{
+			var destination = options.GetDestination();
+			if (destination != null)
+			{
+				options.SetHeader("NServiceBus.WebOutbox.Destination", destination);
+			}
 		}
 	}
 }

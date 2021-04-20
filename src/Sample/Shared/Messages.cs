@@ -1,6 +1,6 @@
 ﻿using NServiceBus;
 
-namespace Sample
+namespace Shared
 {
 	public class TestCommand : ICommand
 	{

@@ -33,13 +33,18 @@ namespace NServiceBus.WebOutbox
 				headers: context.Headers,
 				body: context.Body);
 
+			if (!context.Headers.TryGetValue(WebOutboxHeaders.Destination, out var destination))
+			{
+				destination = _destinationEndpointName;
+			}
+
 			TransportOperation operation;
 			switch (messageIntent)
 			{
 				case MessageIntentEnum.Send:
 					operation = new TransportOperation(
 						request,
-						new UnicastAddressTag(_destinationEndpointName));
+						new UnicastAddressTag(destination));
 					break;
 				case MessageIntentEnum.Publish:
 

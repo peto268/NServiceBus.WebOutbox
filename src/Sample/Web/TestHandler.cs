@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
 using NServiceBus;
+using Shared;
 
-namespace Sample
+namespace Web
 {
 	public class TestHandler : IHandleMessages<TestCommand>, IHandleMessages<ITestEvent>
 	{

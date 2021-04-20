@@ -3,8 +3,9 @@ using System.Threading.Tasks;
 using System.Transactions;
 using NServiceBus;
 using NServiceBus.WebOutbox;
+using Shared;
 
-namespace Sample
+namespace Web
 {
 	class Program
 	{
@@ -23,7 +24,8 @@ namespace Sample
 
 			Console.WriteLine("Type something to send messages");
 			Console.WriteLine("Type \"rollback\" to simulate the send/rollback scenario");
-			Console.WriteLine("Type \"exit\" to quit");
+			Console.WriteLine("Type \"to BlueEndpoint\" to simulate sending a message to a specific endpoint");
+			Console.WriteLine("Type \"exit\" to exit");
 
 			do
 			{
@@ -35,8 +37,15 @@ namespace Sample
 
 				using var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
 
-				await web.Send(new TestCommand {Text = $"From web {line}"});
-				await web.Publish<ITestEvent>(e => e.Text = $"From web {line}");
+				if (line.StartsWith("to "))
+				{
+					await web.Send(line.Substring(3), new TestCommand {Text = $"From Web {line}"});
+				}
+				else
+				{
+					await web.Send(new TestCommand {Text = $"From Web {line}"});
+					await web.Publish<ITestEvent>(e => e.Text = $"From Web {line}");
+				}
 
 				if (line == "rollback")
 				{
@@ -77,7 +86,7 @@ namespace Sample
 			var transport = workerConfiguration.UseTransport<LearningTransport>();
 
 			var routing = transport.Routing();
-			routing.RouteToEndpoint(typeof(Program).Assembly, "Worker");
+			routing.RouteToEndpoint(typeof(TestCommand), "Worker");
 
 			workerConfiguration.UsePersistence<InMemoryPersistence>();
 			workerConfiguration.EnableInstallers();

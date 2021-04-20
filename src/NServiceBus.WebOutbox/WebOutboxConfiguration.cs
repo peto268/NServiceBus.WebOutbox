@@ -24,7 +24,6 @@ namespace NServiceBus.WebOutbox
 		where TOutbox : TransportDefinition, new()
 		where TDestination : TransportDefinition, new()
 	{
-		private readonly string _outboxEndpointName;
 		private readonly EndpointConfiguration _outboxEndpointConfiguration;
 
 		private readonly RawEndpointConfiguration _forwarderEndpointConfiguration;
@@ -42,29 +41,19 @@ namespace NServiceBus.WebOutbox
 			Action<TransportExtensions<TDestination>> configureDestinationTransport,
 			string poisonMessageQueue)
 		{
-			_outboxEndpointName = outboxEndpointName;
 			_outboxEndpointConfiguration = new EndpointConfiguration(outboxEndpointName);
 
 			configureOutboxTransport(_outboxEndpointConfiguration.UseTransport<TOutbox>());
 
-			// Disable default publish routing behavior
-			_outboxEndpointConfiguration.DisableFeature(
-				Type.GetType("NServiceBus.Features.MessageDrivenSubscriptions, NServiceBus.Core"));
-			_outboxEndpointConfiguration.DisableFeature(
-				Type.GetType("NServiceBus.Features.NativePublishSubscribeFeature, NServiceBus.Core"));
+			_outboxEndpointConfiguration.Pipeline.Replace(
+				"UnicastSendRouterConnector",
+				new UnicastSendRouterConnector(outboxEndpointName),
+				"Routes all messages to the outbox endpoint");
 
-			// Add missing parts that were removed by disabling ^^^
-			_outboxEndpointConfiguration.Pipeline.Register(
-				new SendOnlySubscribeTerminator(),
-				"Throws an exception when trying to subscribe");
-			_outboxEndpointConfiguration.Pipeline.Register(
-				new SendOnlyUnsubscribeTerminator(),
-				"Throws an exception when trying to unsubscribe");
-
-			// Static publish routing
-			_outboxEndpointConfiguration.Pipeline.Register(
-				new OutboxPublishConnector(outboxEndpointName),
-				"Routes all publishes to the outbox endpoint");
+			_outboxEndpointConfiguration.Pipeline.Replace(
+				"OutgoingPhysicalToRoutingConnector",
+				new OutgoingPhysicalToRoutingConnector(outboxEndpointName),
+				"Routes all messages to the outbox endpoint");
 
 			_outboxEndpointConfiguration.SendOnly();
 
@@ -101,7 +90,6 @@ namespace NServiceBus.WebOutbox
 
 			// Setup the message forwarder
 			var forwarder = new MessageForwarder(_destinationEndpointName, destinationEndpoint);
-
 			_onMessage = forwarder.OnMessage;
 
 			var forwarderEndpoint = await RawEndpoint.Start(_forwarderEndpointConfiguration).ConfigureAwait(false);
@@ -110,7 +98,7 @@ namespace NServiceBus.WebOutbox
 
 			var outboxEndpoint = await Endpoint.Start(_outboxEndpointConfiguration).ConfigureAwait(false);
 
-			return new WebOutboxEndpoint(_outboxEndpointName, outboxEndpoint, forwarderEndpoint, destinationEndpoint);
+			return new WebOutboxEndpoint(outboxEndpoint, forwarderEndpoint, destinationEndpoint);
 		}
 	}
 }
