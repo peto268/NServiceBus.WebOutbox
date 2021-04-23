@@ -2,12 +2,30 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Authors>Peter Mihalik</Authors>
+    <Description>An outbox implementation for web endpoints.</Description>
+    <PackageOutputPath>..\..\artifacts</PackageOutputPath>
+    <PackageProjectUrl>https://github.com/peto268/NServiceBus.WebOutbox</PackageProjectUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <Version>1.0.0-rc</Version>
+    <PackageTags>nservicebus</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="NServiceBus" Version="[7.3.0, 8.0.0)" />
     <PackageReference Include="NServiceBus.Raw" Version="3.2.2" />
     <PackageReference Include="NServiceBus.SqlServer" Version="[5.0.1, 7.0.0)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>
