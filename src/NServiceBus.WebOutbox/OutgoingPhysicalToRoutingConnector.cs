@@ -27,7 +27,7 @@ namespace NServiceBus.WebOutbox
 				},
 				context);
 
-			await stage(routingContext);
+			await stage(routingContext).ConfigureAwait(false);
 		}
 	}
 }
