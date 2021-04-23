@@ -21,10 +21,7 @@ namespace NServiceBus.WebOutbox
 		{
 			context.Headers[Headers.MessageIntent] = MessageIntentEnum.Send.ToString();
 
-			if (!context.Headers.ContainsKey(WebOutboxHeaders.Destination))
-			{
-				context.Headers[WebOutboxHeaders.Destination] = GetDestination(context);
-			}
+			context.Headers[WebOutboxHeaders.Destination] = GetDestination(context);
 
 			var logicalMessageContext = this.CreateOutgoingLogicalMessageContext(
 				context.Message,

@@ -7,29 +7,13 @@ using NServiceBus.Transport;
 
 namespace NServiceBus.WebOutbox
 {
-	public class WebOutboxConfiguration<TDestination> : WebOutboxConfiguration<SqlServerTransport, TDestination>
-		where TDestination : TransportDefinition, new()
+	public class WebOutboxConfiguration
 	{
-		public WebOutboxConfiguration(string outboxEndpointName,
-			Action<TransportExtensions<SqlServerTransport>> configureOutboxTransport,
-			string destinationEndpointName,
-			Action<TransportExtensions<TDestination>> configureDestinationTransport,
-			string poisonMessageQueue)
-			: base(outboxEndpointName, configureOutboxTransport,
-				destinationEndpointName, configureDestinationTransport,
-				poisonMessageQueue)
-		{
-		}
-	}
-
-	public class WebOutboxConfiguration<TOutbox, TDestination>
-		where TOutbox : TransportDefinition, new()
-		where TDestination : TransportDefinition, new()
-	{
-		private readonly IList<RouteTableEntry> _configRouteTableEntries;
-		private readonly UnicastRoutingTable _unicastRoutingTable;
+		private readonly IList<RouteTableEntry> _configRouteTableEntries = new List<RouteTableEntry>();
+		private readonly UnicastRoutingTable _unicastRoutingTable = new UnicastRoutingTable();
 
 		private readonly EndpointConfiguration _outboxEndpointConfiguration;
+		private readonly List<Action<EndpointConfiguration>> _outboxEndpointConfigurationActions = new List<Action<EndpointConfiguration>>();
 
 		private readonly RawEndpointConfiguration _forwarderEndpointConfiguration;
 
@@ -38,20 +22,9 @@ namespace NServiceBus.WebOutbox
 
 		private Func<MessageContext, IDispatchMessages, Task> _onMessage;
 
-		private Action<EndpointConfiguration> _configureOutboxEndpoint;
-
-		public WebOutboxConfiguration(string outboxEndpointName,
-			Action<TransportExtensions<TOutbox>> configureOutboxTransport,
-			string destinationEndpointName,
-			Action<TransportExtensions<TDestination>> configureDestinationTransport,
-			string poisonMessageQueue)
+		public WebOutboxConfiguration(string outboxEndpointName, string destinationEndpointName, string poisonMessageQueue)
 		{
-			_configRouteTableEntries = new List<RouteTableEntry>();
-			_unicastRoutingTable = new UnicastRoutingTable();
-
 			_outboxEndpointConfiguration = new EndpointConfiguration(outboxEndpointName);
-
-			configureOutboxTransport(_outboxEndpointConfiguration.UseTransport<TOutbox>());
 
 			_outboxEndpointConfiguration.Pipeline.Replace(
 				"UnicastSendRouterConnector",
@@ -70,23 +43,37 @@ namespace NServiceBus.WebOutbox
 				onMessage: (context, messages) => _onMessage?.Invoke(context, messages),
 				poisonMessageQueue: poisonMessageQueue);
 
-			var transportExtensions = _forwarderEndpointConfiguration.UseTransport<TOutbox>();
-			configureOutboxTransport(transportExtensions);
-			// Prevent distributed transactions with the destination transport
-			transportExtensions.Transactions(TransportTransactionMode.SendsAtomicWithReceive);
-
 			_destinationEndpointName = destinationEndpointName;
 			_destinationEndpointConfiguration = RawEndpointConfiguration.CreateSendOnly(destinationEndpointName);
+		}
 
-			configureDestinationTransport(_destinationEndpointConfiguration.UseTransport<TDestination>());
+		public void ConfigureOutboxTransport<TOutbox>(
+			Action<TransportExtensions<TOutbox>> configureOutboxTransport = null)
+			where TOutbox : TransportDefinition, new()
+		{
+			var outboxTransport = _outboxEndpointConfiguration.UseTransport<TOutbox>();
+			configureOutboxTransport?.Invoke(outboxTransport);
+
+			var forwarderTransport = _forwarderEndpointConfiguration.UseTransport<TOutbox>();
+			configureOutboxTransport?.Invoke(forwarderTransport);
+			// Prevent distributed transactions with the destination transport
+			forwarderTransport.Transactions(TransportTransactionMode.SendsAtomicWithReceive);
 		}
 
 		public void ConfigureOutboxEndpoint(Action<EndpointConfiguration> configureOutboxEndpoint)
 		{
-			_configureOutboxEndpoint = configureOutboxEndpoint;
+			_outboxEndpointConfigurationActions.Add(configureOutboxEndpoint);
 		}
 
-		public void AutoCreateQueue()
+		public void ConfigureDestinationTransport<TDestination>(
+			Action<TransportExtensions<TDestination>> configureDestinationTransport = null)
+			where TDestination : TransportDefinition, new()
+		{
+			var transport = _destinationEndpointConfiguration.UseTransport<TDestination>();
+			configureDestinationTransport?.Invoke(transport);
+		}
+
+		public void AutoCreateQueues()
 		{
 			_forwarderEndpointConfiguration.AutoCreateQueue();
 			_destinationEndpointConfiguration.AutoCreateQueue();
@@ -102,7 +89,7 @@ namespace NServiceBus.WebOutbox
 			_unicastRoutingTable.AddOrReplaceRoutes(sourceKey, entries);
 		}
 
-		public async Task<IEndpointInstance> Start()
+		public async Task<IEndpointInstance> StartOutbox()
 		{
 			var destinationEndpoint = await RawEndpoint.Start(_destinationEndpointConfiguration).ConfigureAwait(false);
 
@@ -112,7 +99,10 @@ namespace NServiceBus.WebOutbox
 
 			var forwarderEndpoint = await RawEndpoint.Start(_forwarderEndpointConfiguration).ConfigureAwait(false);
 
-			_configureOutboxEndpoint?.Invoke(_outboxEndpointConfiguration);
+			foreach (var configAction in _outboxEndpointConfigurationActions)
+			{
+				configAction.Invoke(_outboxEndpointConfiguration);
+			}
 
 			_unicastRoutingTable.AddOrReplaceRoutes("EndpointConfiguration", _configRouteTableEntries);
 

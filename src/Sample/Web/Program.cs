@@ -62,23 +62,24 @@ namespace Web
 
 		private static async Task<IEndpointInstance> CreateWebEndpoint()
 		{
-			var webOutboxConfiguration = new WebOutboxConfiguration<LearningTransport>(
+			var webOutboxConfiguration = new WebOutboxConfiguration(
 				outboxEndpointName: "Web",
-				configureOutboxTransport: transport =>
-				{
-					transport.ConnectionString(SqlConnectionString);
-				},
 				destinationEndpointName: "Worker",
-				configureDestinationTransport: transport =>
-				{
-				},
 				poisonMessageQueue: "poison");
 
-			webOutboxConfiguration.AutoCreateQueue();
+			webOutboxConfiguration.ConfigureOutboxTransport<SqlServerTransport>(
+				transport =>
+				{
+					transport.ConnectionString(SqlConnectionString);
+				});
+
+			webOutboxConfiguration.ConfigureDestinationTransport<LearningTransport>();
 
 			webOutboxConfiguration.RouteToEndpoint(typeof(TestCommand), "Worker");
 
-			return await webOutboxConfiguration.Start();
+			webOutboxConfiguration.AutoCreateQueues();
+
+			return await webOutboxConfiguration.StartOutbox();
 		}
 
 		private static async Task<IEndpointInstance> CreateWorkerEndpoint()
