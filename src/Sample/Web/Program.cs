@@ -1,6 +1,7 @@
 ﻿using System;
+using System.Data.Common;
 using System.Threading.Tasks;
-using System.Transactions;
+using Microsoft.Data.SqlClient;
 using NServiceBus;
 using NServiceBus.WebOutbox;
 using Shared;
@@ -12,15 +13,16 @@ namespace Web
 		private const string SqlConnectionString =
 			"Data Source=.\\SQL2019;Initial Catalog=WebOutboxSample;Trusted_Connection=True";
 
-		static void Main()
-		{
-			MainAsync().GetAwaiter().GetResult();
-		}
-
-		static async Task MainAsync()
+		static async Task Main()
 		{
 			var worker = await CreateWorkerEndpoint();
-			var web = await CreateWebEndpoint();
+			var webOutbox = await CreateWebOutbox();
+
+			DbTransaction currentTransaction = null;
+
+			// ReSharper disable once AccessToModifiedClosure
+			var webMessageSession = webOutbox.CreateMessageSession(() =>
+				TransportTransactionFactory.CreateFromDbTransaction(currentTransaction));
 
 			Console.WriteLine("Type something to send messages");
 			Console.WriteLine("Type \"rollback\" to simulate the send/rollback scenario");
@@ -35,32 +37,35 @@ namespace Web
 					break;
 				}
 
-				using var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+				await using var conn = new SqlConnection(SqlConnectionString);
+				await conn.OpenAsync();
+				await using var tran = currentTransaction = await conn.BeginTransactionAsync();
 
 				if (line.StartsWith("to "))
 				{
-					await web.Send(line.Substring(3), new TestCommand {Text = $"From Web {line}"});
+					await webMessageSession.Send(line.Substring(3), new TestCommand { Text = $"From Web {line}" });
 				}
 				else
 				{
-					await web.Send(new TestCommand {Text = $"From Web {line}"});
-					await web.Publish<ITestEvent>(e => e.Text = $"From Web {line}");
+					await webMessageSession.Send(new TestCommand { Text = $"From Web {line}" });
+					await webMessageSession.Publish<ITestEvent>(e => e.Text = $"From Web {line}");
 				}
 
 				if (line == "rollback")
 				{
+					await currentTransaction.RollbackAsync();
 					continue;
 				}
 
-				scope.Complete();
+				await currentTransaction.CommitAsync();
 			}
 			while (true);
 
-			await web.Stop();
+			await webOutbox.Stop();
 			await worker.Stop();
 		}
 
-		private static async Task<IEndpointInstance> CreateWebEndpoint()
+		private static async Task<WebOutbox> CreateWebOutbox()
 		{
 			var webOutboxConfiguration = new WebOutboxConfiguration(
 				outboxEndpointName: "Web",

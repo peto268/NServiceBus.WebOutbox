@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Transactions;
 using NServiceBus.Extensibility;
 using NServiceBus.Raw;
 using NServiceBus.Routing;
@@ -55,14 +54,9 @@ namespace NServiceBus.WebOutbox
 					return;
 			}
 
-			var transaction = new TransportTransaction();
-			
-			// Participate in a tx scope if its active
-			transaction.Set(Transaction.Current);
-
 			await _destinationEndpoint.Dispatch(
 					outgoingMessages: new TransportOperations(operation),
-					transaction: transaction,
+					transaction: new TransportTransaction(),
 					context: new ContextBag())
 				.ConfigureAwait(false);
 		}

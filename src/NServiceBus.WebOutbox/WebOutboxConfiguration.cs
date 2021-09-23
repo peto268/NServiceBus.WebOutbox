@@ -24,6 +24,10 @@ namespace NServiceBus.WebOutbox
 
 		public WebOutboxConfiguration(string outboxEndpointName, string destinationEndpointName, string poisonMessageQueue)
 		{
+			Guard.AgainstNullAndEmpty(outboxEndpointName, nameof(outboxEndpointName));
+			Guard.AgainstNullAndEmpty(destinationEndpointName, nameof(destinationEndpointName));
+			Guard.AgainstNullAndEmpty(poisonMessageQueue, nameof(poisonMessageQueue));
+
 			_outboxEndpointConfiguration = new EndpointConfiguration(outboxEndpointName);
 
 			_outboxEndpointConfiguration.Pipeline.Replace(
@@ -62,6 +66,7 @@ namespace NServiceBus.WebOutbox
 
 		public void ConfigureOutboxEndpoint(Action<EndpointConfiguration> configureOutboxEndpoint)
 		{
+			Guard.AgainstNull(configureOutboxEndpoint, nameof(configureOutboxEndpoint));
 			_outboxEndpointConfigurationActions.Add(configureOutboxEndpoint);
 		}
 
@@ -89,7 +94,7 @@ namespace NServiceBus.WebOutbox
 			_unicastRoutingTable.AddOrReplaceRoutes(sourceKey, entries);
 		}
 
-		public async Task<IEndpointInstance> StartOutbox()
+		public async Task<WebOutbox> StartOutbox()
 		{
 			var destinationEndpoint = await RawEndpoint.Start(_destinationEndpointConfiguration).ConfigureAwait(false);
 
@@ -108,7 +113,7 @@ namespace NServiceBus.WebOutbox
 
 			var outboxEndpoint = await Endpoint.Start(_outboxEndpointConfiguration).ConfigureAwait(false);
 
-			return new WebOutboxEndpoint(outboxEndpoint, forwarderEndpoint, destinationEndpoint);
+			return new WebOutbox(outboxEndpoint, forwarderEndpoint, destinationEndpoint);
 		}
 	}
 }
